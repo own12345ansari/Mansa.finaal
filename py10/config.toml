@@ -1,0 +1,15 @@
+# ═══════════════════════════════════════════════════════════════
+# MANSA — Streamlit config
+# ضع هذا الملف داخل مجلد .streamlit (بجانب secrets.toml)
+# يقفل ثيم Streamlit على الداكن نهائياً — خيار System/Light/Dark
+# من قائمة Streamlit لن يكسر مانسا بعد الآن.
+# ═══════════════════════════════════════════════════════════════
+[theme]
+base = "dark"
+backgroundColor = "#0A0612"
+secondaryBackgroundColor = "#1A0F26"
+textColor = "#F0E8D5"
+primaryColor = "#D4A017"
+
+[client]
+toolbarMode = "minimal"
