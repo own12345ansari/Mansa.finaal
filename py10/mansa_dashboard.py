@@ -4847,15 +4847,15 @@ def _get_app_base_url() -> str:
     Authorized redirect URIs) and nothing in the code needs to change.
     """
     v = (st.session_state.get("_app_base_url") or "").strip()
-    if v:
-        return v.rstrip("/")
-    try:
+     if v:
+        return v.split("?")[0].split("#")[0].rstrip("/")
+     try:
         v = (st.secrets.get("APP_BASE_URL", "") or "").strip()
-    except Exception:
+     except Exception:
         v = ""
-    if v:
-        return v.rstrip("/")
-    return "http://localhost:8501"
+     if v:
+        return v.split("?")[0].split("#")[0].rstrip("/")
+     return "http://localhost:8501"
 
 
 def sb_get_google_auth_url() -> str:
