@@ -165,27 +165,33 @@ st.components.v1.html(f"""
 """, height=0)
 
 # ── EARLY Google-OAuth fragment capture ──────────────────────────────────────
-# Runs on EVERY render, at the very top, before any auth logic. Implicit-flow
-# tokens arrive in the URL fragment (#access_token=...) which never reaches the
-# Python server; this promotes them to a query string and reloads at the TOP
-# window (works when same-origin, which localhost is).
+# Implicit-flow tokens arrive in the URL fragment (#access_token=...) which the
+# Python server never sees. A component iframe runs on about:srcdoc and is
+# CROSS-ORIGIN to the real app page, so it cannot read window.top.location.hash.
+# Fix: inject a <script> INTO THE PARENT document (same trick the PWA manifest
+# block uses). That script runs natively on the streamlit.app origin, so it can
+# read location.hash and promote it to ?access_token=... with no origin block.
 st.components.v1.html(
     """
     <div style="display:none">oauth-hash-capture</div>
     <script>
     (function () {
-      function readHash() {
-        try { if (window.top && window.top.location) return window.top.location.hash || ""; } catch(e){}
-        try { if (window.parent && window.parent.location) return window.parent.location.hash || ""; } catch(e){}
-        return window.location.hash || "";
-      }
-      function baseOf(loc){ try { return loc.href.split('#')[0].split('?')[0]; } catch(e){ return ""; } }
-      var h = readHash();
-      if (h && h.indexOf("access_token") !== -1) {
-        var q = h.replace(/^#/, "");
-        try { window.top.location.replace(baseOf(window.top.location) + "?" + q); return; } catch(e){}
-        try { window.parent.location.replace(baseOf(window.parent.location) + "?" + q); return; } catch(e){}
-      }
+      try {
+        var pdoc = window.parent.document;
+        if (!pdoc) return;
+        if (pdoc.getElementById('mansa-oauth-shim')) return;   // inject once
+        var s = pdoc.createElement('script');
+        s.id = 'mansa-oauth-shim';
+        s.textContent =
+          "(function(){try{" +
+          "var h=window.location.hash||'';" +
+          "if(h && h.indexOf('access_token')!==-1){" +
+          "var q=h.replace(/^#/,'');" +
+          "var base=window.location.href.split('#')[0].split('?')[0];" +
+          "window.location.replace(base+'?'+q);" +
+          "}}catch(e){}})();";
+        pdoc.body.appendChild(s);
+      } catch (e) {}
     })();
     </script>
     """,
