@@ -1,0 +1,80 @@
+# ═══════════════════════════════════════════════════════════════════════
+# MANSA — تسجيل التوقّع اليومي تلقائياً
+# ───────────────────────────────────────────────────────────────────────
+# ضع هذا الملف في المسار:  .github/workflows/daily-forecast-log.yml
+#
+# لماذا متصفح حقيقي وليس curl؟
+#   Streamlit لا ينفّذ كود بايثون على طلب HTTP عادي — الصفحة الأولى مجرد
+#   HTML، والكود يعمل فقط عند فتح اتصال websocket من متصفح. لذلك نستخدم
+#   Playwright (متصفح بلا واجهة) ليفتح التطبيق فعلياً.
+# ═══════════════════════════════════════════════════════════════════════
+name: Daily forecast log
+
+on:
+  schedule:
+    # 04:30 UTC = 07:30 بتوقيت عمّان — بعد إغلاق الأسواق الأمريكية
+    - cron: "30 4 * * *"
+  workflow_dispatch:        # يسمح بالتشغيل اليدوي من تبويب Actions
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Playwright
+        run: |
+          pip install --quiet playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Open MANSA and trigger the forecast log
+        env:
+          APP_URL: https://mansafinaal-yyxxuyahypoxqbv65akrux.streamlit.app
+        run: |
+          python - <<'PY'
+          import os, sys, time
+          from playwright.sync_api import sync_playwright
+
+          url = os.environ["APP_URL"].rstrip("/") + "/?cron=1"
+          print("opening:", url)
+
+          with sync_playwright() as p:
+              browser = p.chromium.launch()
+              page = browser.new_page()
+              page.goto(url, timeout=90_000)
+
+              # The app may be asleep; Streamlit Cloud shows a wake-up screen.
+              # Give it time, and click the wake button if it appears.
+              try:
+                  page.get_by_text("Yes, get this app back up!").click(timeout=15_000)
+                  print("app was asleep - clicked wake button")
+                  page.wait_for_timeout(20_000)
+              except Exception:
+                  pass
+
+              # Wait for the app to finish its run and print the marker.
+              ok = False
+              for _ in range(24):            # up to ~4 minutes
+                  body = page.inner_text("body")
+                  if "cron ok" in body:
+                      ok = True
+                      break
+                  if "cron failed" in body:
+                      print("APP REPORTED FAILURE:")
+                      print(body[:1500])
+                      browser.close()
+                      sys.exit(1)
+                  page.wait_for_timeout(10_000)
+
+              print(page.inner_text("body")[:800])
+              browser.close()
+
+          if not ok:
+              print("::warning::app did not report 'cron ok' in time")
+              sys.exit(1)
+          print("forecast logged successfully")
+          PY
